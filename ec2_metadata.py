@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import argparse
+import os
 import requests
 from cached_property import cached_property
+from sys import argv
 
 __author__ = 'Adam Johnson'
 __email__ = 'me@adamj.eu'
@@ -282,3 +285,81 @@ class NetworkInterface(BaseLazyObject):
 
 
 ec2_metadata = EC2Metadata()
+
+if __name__ == '__main__':
+    def split_args_on_sentinel(args):
+        sentinel = '--'
+        if sentinel not in args:
+            return args, []
+        # we only care about the first occurance of the sentinel
+        index_of_sentinel = args.index(sentinel)
+        return args[:index_of_sentinel], args[index_of_sentinel + 1:]
+
+    def parse_args():
+        # Extract arguments before and after --
+        args_to_process, unprocessed_args = split_args_on_sentinel(argv[1:])
+        parser = argparse.ArgumentParser(
+            description='Set ec2 instance metadata as environment varibles.')
+        parser.add_argument(
+            'action',
+            choices=['print', 'exec'],
+            help='Specify action to be performed.',
+        )
+        variable_help_msg = \
+            'Specify variables to be defined. ' + \
+            'If none are specified, all are set.'
+        parser.add_argument(
+            'VARIABLES',
+            help=variable_help_msg,
+            nargs='*',
+        )
+
+        return parser.parse_args(args_to_process), unprocessed_args
+
+    valid_variable_list = [
+        'ACCOUNT_ID',
+        'AMI_ID',
+        'AVAILABILITY_ZONE',
+        'AMI_LAUNCH_INDEX',
+        'AMI_MANIFEST_PATH',
+        'IAM_INFO',
+        'INSTANCE_ACTION',
+        'INSTANCE_ID',
+        'INSTANCE_IDENTITY_DOCUMENT',
+        'INSTANCE_PROFILE_ARN',
+        'INSTANCE_PROFILE_ID',
+        'INSTANCE_TYPE',
+        'KERNEL_ID',
+        'MAC',
+        'NETWORK_INTERFACES',
+        'PRIVATE_HOSTNAME',
+        'PRIVATE_IPV4',
+        'PUBLIC_HOSTNAME',
+        'PUBLIC_IPV4',
+        'REGION',
+        'RESERVATION_ID',
+        'SECURITY_GROUPS',
+        'USER_DATA',
+    ]
+
+    parsed_args = parse_args()
+    if parsed_args[0].action == 'print' and len(parsed_args[1]) != 0:
+        raise Exception("Trailing arguments.")
+
+    variables = set(parsed_args[0].VARIABLES)
+    for v in variables:
+        if v not in valid_variable_list:
+            raise Exception(
+                "'{}' is not a valid variable! Choose variables from {}".format(
+                    v, ', '.join(valid_variable_list)))
+    if len(variables) == 0:
+        variables = set(valid_variable_list)
+
+    for v in variables:
+        os.environ[v] = eval('ec2_metadata.{}'.format(v.lower()))
+
+    if parsed_args[0].action == 'print':
+        for v in variables:
+            print("{}={}".format(v, os.environ[v]))
+    else:
+        os.system(parsed_args[1])
