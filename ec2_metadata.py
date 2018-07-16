@@ -362,4 +362,4 @@ if __name__ == '__main__':
         for v in variables:
             print("{}={}".format(v, os.environ[v]))
     else:
-        os.system(parsed_args[1])
+        os.system(' '.join(parsed_args[1]))
